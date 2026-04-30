@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="it">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IoT Real-Time Dashboard</title>
+    
+    <!-- Libreria per i grafici -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <style>
+        :root {
+            --primary: #00d2ff;
+            --secondary: #3a7bd5;
+            --bg: #121212;
+            --card: #1e1e26;
+            --text: #ffffff;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+        }
+
+        .container {
+            width: 90%;
+            max-width: 800px;
+            text-align: center;
+        }
+
+        .header {
+            margin-bottom: 30px;
+        }
+
+        .header h1 {
+            font-weight: 300;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            background: linear-gradient(to right, var(--primary), var(--secondary));
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 20px;
+        }
+
+        .card {
+            background: var(--card);
+            padding: 30px;
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            transition: transform 0.3s ease;
+        }
+
+        .temp-display {
+            font-size: 5rem;
+            font-weight: bold;
+            margin: 10px 0;
+            text-shadow: 0 0 20px rgba(0, 210, 255, 0.3);
+        }
+
+        .unit {
+            font-size: 2rem;
+            color: var(--secondary);
+        }
+
+        .chart-container {
+            margin-top: 30px;
+            background: var(--card);
+            padding: 20px;
+            border-radius: 20px;
+            height: 300px;
+        }
+
+        .status {
+            margin-top: 15px;
+            font-size: 0.8rem;
+            color: #4caf50; /* Green */
+        }
+    </style>
+</head>
+
+<body onload="startup();">
+
+    <div class="container">
+        <div class="header">
+            <h1>Live Sensor Data</h1>
+        </div>
+
+        <div class="stats-grid">
+            <!-- Card Valore Corrente -->
+            <div class="card">
+                <div style="color: #aaa; text-transform: uppercase; font-size: 0.9rem;">Temperatura Attuale</div>
+                <div class="temp-display">
+                    <span id="demo">--</span><span class="unit">°C</span>
+                </div>
+                <div id="status" class="status">● Connesso al server</div>
+            </div>
+        </div>
+
+        <!-- Container per il Grafico -->
+        <div class="chart-container card">
+            <canvas id="tempChart"></canvas>
+        </div>
+    </div>
+
+    <script>
+        let chart;
+        const maxDataPoints = 10; // Quanti punti visualizzare nel grafico
+
+        function initChart() {
+            const ctx = document.getElementById('tempChart').getContext('2d');
+            chart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: [], // Orari
+                    datasets: [{
+                        label: 'Temperatura (°C)',
+                        data: [],
+                        borderColor: '#00d2ff',
+                        backgroundColor: 'rgba(0, 210, 255, 0.1)',
+                        fill: true,
+                        tension: 0.4,
+                        borderWidth: 3,
+                        pointRadius: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        y: { 
+                            beginAtZero: false,
+                            grid: { color: 'rgba(255,255,255,0.1)' },
+                            ticks: { color: '#aaa' }
+                        },
+                        x: { 
+                            grid: { display: false },
+                            ticks: { color: '#aaa' }
+                        }
+                    }
+                }
+            });
+        }
+
+        function startup() {
+            initChart();
+            
+            const socketExample = new WebSocket("ws://localhost:3001");
+
+            socketExample.onopen = function (event) {
+                console.log("Connessione stabilita");
+            };
+
+            socketExample.onmessage = function (event) {
+                const value = parseFloat(event.data);
+                
+                // Se il dato non è un numero (es: il messaggio "something"), lo ignoriamo
+                if (isNaN(value)) return;
+
+                // 1. Aggiorna il numero grande
+                document.getElementById("demo").innerHTML = value;
+
+                // 2. Aggiorna il grafico
+                updateChart(value);
+            }
+
+            socketExample.onclose = function() {
+                document.getElementById("status").innerHTML = "● Disconnesso";
+                document.getElementById("status").style.color = "#f44336";
+            }
+        }
+
+        function updateChart(newValue) {
+            const now = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
+            // Aggiungi nuovo dato
+            chart.data.labels.push(now);
+            chart.data.datasets[0].data.push(newValue);
+
+            // Rimuovi dati vecchi se superano il limite
+            if (chart.data.labels.length > maxDataPoints) {
+                chart.data.labels.shift();
+                chart.data.datasets[0].data.shift();
+            }
+
+            chart.update();
+        }
+    </script>
+</body>
+
+</html>
